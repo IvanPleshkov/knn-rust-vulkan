@@ -139,7 +139,7 @@ impl KnnWorker {
             idx * self.dim * std::mem::size_of::<f32>(),
             self.dim * std::mem::size_of::<f32>(),
         );
-        self.batch_size += 1;
+        self.batched_count += 1;
     }
 
     pub fn remove_vector(&mut self, _vector: &[f32], _idx: u32) {
