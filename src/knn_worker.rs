@@ -160,6 +160,25 @@ impl KnnWorker {
         self.take_best_scores(count)
     }
 
+    pub fn upload_vector_data(&mut self, data: &[f32]) {
+        let vector_data_upload_buffer = Arc::new(GpuBuffer::new(
+            self.vector_data_buffer.device.clone(),
+            "Vector data upload buffer",
+            GpuBufferType::CpuToGpu,
+            self.capacity * self.dim * std::mem::size_of::<f32>(),
+        ));
+        vector_data_upload_buffer.upload_slice(data, 0);
+
+        self.context.copy_gpu_buffer(
+            vector_data_upload_buffer,
+            self.vector_data_buffer.clone(),
+            0,
+            0,
+            self.vector_data_buffer.size,
+        );
+        self.flush();
+    }
+
     pub fn download_vector_data(&mut self) -> Vec<f32> {
         let vector_data_download_buffer = Arc::new(GpuBuffer::new(
             self.vector_data_buffer.device.clone(),
