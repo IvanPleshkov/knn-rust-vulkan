@@ -160,6 +160,28 @@ impl KnnWorker {
         self.take_best_scores(count)
     }
 
+    pub fn download_vector_data(&mut self) -> Vec<f32> {
+        let vector_data_download_buffer = Arc::new(GpuBuffer::new(
+            self.vector_data_buffer.device.clone(),
+            "Vector data upload buffer",
+            GpuBufferType::GpuToCpu,
+            self.capacity * self.dim * std::mem::size_of::<f32>(),
+        ));
+
+        self.context.copy_gpu_buffer(
+            self.vector_data_buffer.clone(),
+            vector_data_download_buffer.clone(),
+            0,
+            0,
+            self.vector_data_buffer.size,
+        );
+        self.flush();
+        let mut result: Vec<f32> = vec![0.; self.dim * self.capacity];
+        vector_data_download_buffer
+            .download_slice(result.as_mut_slice(), 0);
+        result
+    }
+
     fn score_all(&mut self) {
         self.context.bind_pipeline(self.scores_pipeline.clone());
         self.context.dispatch(self.size / BLOCK_SIZE + 1, 1, 1);
