@@ -1,0 +1,38 @@
+#version 450
+
+//layout (local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0) uniform KnnUniformBuffer {
+    uint dim;
+    uint capacity;
+    uint block_size;
+    uint threads_count;
+} knn;
+
+layout(binding = 1) buffer VectorData {
+    float data[];
+} vectors;
+
+layout(binding = 2) buffer QueryData {
+    float data[];
+} query;
+
+struct Score {
+    uint idx;
+    float score;
+};
+
+layout(binding = 3) buffer ScoresData {
+    Score data[];
+} scores;
+
+void main()
+{
+    for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
+        uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
+        float score = 0.0;
+        for (uint i = 0; i < knn.dim; i++) {
+            score += vectors.data[pointId * knn.dim + i] * query.data[i];
+        }
+        scores.data[pointId] = Score(pointId, score);
+    }
+}
