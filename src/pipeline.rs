@@ -10,7 +10,6 @@ use std::sync::Arc;
 #[allow(dead_code)]
 pub struct Pipeline {
     pub(crate) device: Arc<GpuDevice>,
-    pub(crate) name: String,
     pub(crate) shader: Arc<Shader>,
     pub(crate) descriptor_set_layouts: Vec<Arc<DescriptorSetLayout>>,
     pub(crate) descriptor_sets: Vec<Arc<DescriptorSet>>,
@@ -43,7 +42,7 @@ impl Drop for Pipeline {
 }
 
 impl Pipeline {
-    pub(crate) fn new(device: Arc<GpuDevice>, name: &str, builder: &PipelineBuilder) -> Self {
+    pub(crate) fn new(device: Arc<GpuDevice>, builder: &PipelineBuilder) -> Self {
         let descriptor_set_layouts: Vec<_> =
             builder.descriptor_set_layouts.values().cloned().collect();
         let vk_descriptor_set_layouts: Vec<_> = descriptor_set_layouts
@@ -86,7 +85,6 @@ impl Pipeline {
 
         Self {
             device,
-            name: name.to_owned(),
             shader: builder.shader.clone().unwrap(),
             vk_pipeline_layout,
             vk_pipeline: vk_pipelines[0],

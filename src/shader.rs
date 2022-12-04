@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 pub struct Shader {
     pub device: Arc<GpuDevice>,
-    pub name: String,
     pub vk_shader_module: vk::ShaderModule,
     pub vk_pipeline_shader_stage_create_info: vk::PipelineShaderStageCreateInfo,
 }
@@ -27,7 +26,7 @@ impl Drop for Shader {
 }
 
 impl Shader {
-    pub fn new(device: Arc<GpuDevice>, name: &str, shader_code: &[u8]) -> Self {
+    pub fn new(device: Arc<GpuDevice>, shader_code: &[u8]) -> Self {
         let mut spv_file = std::io::Cursor::new(shader_code);
         let shader_code = ash::util::read_spv(&mut spv_file).unwrap();
 
@@ -42,7 +41,6 @@ impl Shader {
         };
         Self {
             device,
-            name: name.to_owned(),
             vk_shader_module: shader_module,
             vk_pipeline_shader_stage_create_info: vk::PipelineShaderStageCreateInfo::builder()
                 .stage(vk::ShaderStageFlags::COMPUTE)

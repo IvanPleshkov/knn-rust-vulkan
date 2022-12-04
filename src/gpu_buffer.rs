@@ -46,7 +46,6 @@ impl Drop for GpuBuffer {
 impl GpuBuffer {
     pub fn new(
         device: Arc<GpuDevice>,
-        debug_name: &str,
         buffer_type: GpuBufferType,
         size: usize,
     ) -> Self {
@@ -83,7 +82,7 @@ impl GpuBuffer {
                 unsafe { device.vk_device.get_buffer_memory_requirements(vk_buffer) };
 
             allocation = device.gpu_alloc(&AllocationCreateDesc {
-                name: debug_name,
+                name: "",
                 requirements,
                 location,
                 linear: true, // Buffers are always linear

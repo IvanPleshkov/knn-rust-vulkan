@@ -48,63 +48,54 @@ impl KnnWorker {
         let batch_size = 128;
         let vector_data_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Vector data",
             GpuBufferType::Storage,
             capacity * dim * std::mem::size_of::<f32>(),
         ));
 
         let vector_data_upload_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Vector data upload buffer",
             GpuBufferType::CpuToGpu,
             batch_size * dim * std::mem::size_of::<f32>(),
         ));
 
         let scores_buffer_odd = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Scores",
             GpuBufferType::Storage,
             capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
         ));
 
         let scores_buffer_even = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Scores",
             GpuBufferType::Storage,
             capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
         ));
 
         let scores_download_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Scores download buffer",
             GpuBufferType::GpuToCpu,
             capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
         ));
 
         let knn_uniform_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Knn uniform buffer",
             GpuBufferType::Uniform,
             std::mem::size_of::<KnnUniformBuffer>(),
         ));
 
         let knn_uniform_buffer_uploader = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Knn uniform buffer",
             GpuBufferType::CpuToGpu,
             std::mem::size_of::<KnnUniformBuffer>(),
         ));
 
         let query_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Query",
             GpuBufferType::Storage,
             dim * std::mem::size_of::<f32>(),
         ));
 
         let query_buffer_uploader = Arc::new(GpuBuffer::new(
             device.clone(),
-            "Query uploader",
             GpuBufferType::CpuToGpu,
             dim * std::mem::size_of::<f32>(),
         ));
@@ -187,7 +178,6 @@ impl KnnWorker {
     pub fn upload_vector_data(&mut self, data: &[f32]) {
         let vector_data_upload_buffer = Arc::new(GpuBuffer::new(
             self.vector_data_buffer.device.clone(),
-            "Vector data upload buffer",
             GpuBufferType::CpuToGpu,
             self.capacity * self.dim * std::mem::size_of::<f32>(),
         ));
@@ -206,7 +196,6 @@ impl KnnWorker {
     pub fn download_vector_data(&mut self) -> Vec<f32> {
         let vector_data_download_buffer = Arc::new(GpuBuffer::new(
             self.vector_data_buffer.device.clone(),
-            "Vector data upload buffer",
             GpuBufferType::GpuToCpu,
             self.capacity * self.dim * std::mem::size_of::<f32>(),
         ));
@@ -291,7 +280,6 @@ impl KnnWorker {
     ) -> Arc<Pipeline> {
         let shader = Arc::new(Shader::new(
             device.clone(),
-            "compute_dot_scores",
             include_bytes!("../shaders/compute_dot_scores.spv"),
         ));
 
@@ -311,7 +299,7 @@ impl KnnWorker {
             .add_descriptor_set_layout(0, descriptor_set_layout.clone())
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader)
-            .build(device.clone(), "dot distances score")
+            .build(device.clone())
     }
 
     fn create_best_scores_pipeline(
@@ -322,7 +310,6 @@ impl KnnWorker {
     ) -> (Arc<Pipeline>, Arc<Pipeline>) {
         let shader = Arc::new(Shader::new(
             device.clone(),
-            "take_best",
             include_bytes!("../shaders/take_best.spv"),
         ));
 
@@ -340,7 +327,7 @@ impl KnnWorker {
             .add_descriptor_set_layout(0, descriptor_set_layout.clone())
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader.clone())
-            .build(device.clone(), "dot distances score");
+            .build(device.clone());
 
         let descriptor_set_layout = DescriptorSetLayout::builder()
             .add_uniform_buffer(0)
@@ -356,7 +343,7 @@ impl KnnWorker {
             .add_descriptor_set_layout(0, descriptor_set_layout.clone())
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader)
-            .build(device.clone(), "dot distances score");
+            .build(device.clone());
 
         (pipeline_odd, pipeline_even)
     }
