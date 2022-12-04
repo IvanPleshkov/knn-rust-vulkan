@@ -1,5 +1,7 @@
 #version 450
 
+#define LARGE_K
+
 struct Score {
     uint idx;
     float score;
@@ -20,15 +22,35 @@ layout(binding = 2) buffer ScoresDst {
     Score data[];
 } scoresDst;
 
-#define BHEAP_NAME scoresDst.data
+#ifdef LARGE_K
+
+#define BHEAP_NAME LargeHeap
+#define BHEAP_DATA scoresDst.data
 #define BHEAP_TYPE Score
 #define BHEAP_CMP(a, b) a.score > b.score
 #include "bheap.comp"
 
+#else
+
+Score heap_data[8];
+
+#define BHEAP_NAME SmallHeap
+#define BHEAP_DATA heap_data
+#define BHEAP_TYPE Score
+#define BHEAP_CMP(a, b) a.score > b.score
+#include "bheap.comp"
+
+#endif
+
 void main()
 {
     bheap_capacity = knn.k;
+#ifdef LARGE_K
     bheap_offset = gl_GlobalInvocationID.x * knn.k;
+#else
+    bheap_offset = 0;
+#endif
+
     for (uint relativePointId = 0; relativePointId < knn.block_size - 1; relativePointId++) {
         uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
         bheap_push(scoresSrc.data[pointId]);
@@ -38,4 +60,10 @@ void main()
     }
     uint pointId = gl_GlobalInvocationID.x * knn.block_size + knn.block_size - 1;
     bheap_push(scoresSrc.data[pointId]);
+
+#ifndef LARGE_K
+    for (uint i = 0; i < knn.k; i++) {
+        scoresDst.data[gl_GlobalInvocationID.x * knn.k + i] = bheap_pop();
+    }
+#endif
 }

@@ -4,15 +4,15 @@ uint bheap_capacity = 0;
 uint bheap_size = 0;
 
 void _bheap_swap(uint i, uint j) {
-    BHEAP_TYPE tmp = BHEAP_NAME[bheap_offset + i];
-    BHEAP_NAME[bheap_offset + i] = BHEAP_NAME[bheap_offset + j];
-    BHEAP_NAME[bheap_offset + j] = tmp;
+    BHEAP_TYPE tmp = BHEAP_DATA[bheap_offset + i];
+    BHEAP_DATA[bheap_offset + i] = BHEAP_DATA[bheap_offset + j];
+    BHEAP_DATA[bheap_offset + j] = tmp;
 }
 
 bool _bheap_cmp(uint i, uint j) {
     return BHEAP_CMP(
-        (BHEAP_NAME[bheap_offset + i]),
-        (BHEAP_NAME[bheap_offset + j])
+        (BHEAP_DATA[bheap_offset + i]),
+        (BHEAP_DATA[bheap_offset + j])
     );
 }
 
@@ -35,7 +35,7 @@ void _sift_down(uint i) {
 void bheap_push(BHEAP_TYPE score) {
     uint i = bheap_size;
     bheap_size++;
-    BHEAP_NAME[bheap_offset + i] = score;
+    BHEAP_DATA[bheap_offset + i] = score;
     while (i > 0 && _bheap_cmp(i, (i - 1) / 2)) {
         _bheap_swap(i, (i - 1) / 2);
         i = (i - 1) / 2;
@@ -43,9 +43,9 @@ void bheap_push(BHEAP_TYPE score) {
 }
 
 BHEAP_TYPE bheap_pop() {
-    BHEAP_TYPE pop_result = BHEAP_NAME[bheap_offset];
+    BHEAP_TYPE pop_result = BHEAP_DATA[bheap_offset];
     bheap_size--;
-    BHEAP_NAME[bheap_offset] = BHEAP_NAME[bheap_offset + bheap_size];
+    BHEAP_DATA[bheap_offset] = BHEAP_DATA[bheap_offset + bheap_size];
     _sift_down(0);
     return pop_result;
 }
