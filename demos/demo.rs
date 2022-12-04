@@ -39,9 +39,12 @@ fn main() {
     }
 
     println!("start adding vectors");
+    let timer = std::time::Instant::now();
     for (i, v) in list.iter().enumerate() {
         knn_worker.add_vector(v, i);
     }
+    knn_worker.flush();
+    println!("uploading vectors time {:?}", timer.elapsed());
     println!("finish adding vectors");
 
     let query: Vec<f32> = (0..vector_dim).map(|_| rng.gen()).collect();

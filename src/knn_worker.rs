@@ -50,10 +50,8 @@ pub struct KnnWorker {
     knn_uniform_buffer: Arc<GpuBuffer>,
     knn_uniform_buffer_uploader: Arc<GpuBuffer>,
     query_buffer: Arc<GpuBuffer>,
-    query_buffer_uploader: Arc<GpuBuffer>,
     scores_pipeline: Arc<Pipeline>,
-    take_best_pipelines_odd: Arc<Pipeline>,
-    take_best_pipelines_even: Arc<Pipeline>,
+    take_best_pipelines: Arc<Pipeline>,
 }
 
 #[repr(C)]
@@ -66,7 +64,13 @@ struct KnnUniformBuffer {
 
 impl KnnWorker {
     pub fn new(device: Arc<GpuDevice>, dim: usize, capacity: usize) -> Self {
-        let batch_size = 128;
+        let batch_size = 1024;
+        let query_buffer = Arc::new(GpuBuffer::new(
+            device.clone(),
+            GpuBufferType::Storage,
+            dim * std::mem::size_of::<f32>(),
+        ));
+
         let vector_data_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
             GpuBufferType::Storage,
@@ -109,18 +113,6 @@ impl KnnWorker {
             std::mem::size_of::<KnnUniformBuffer>(),
         ));
 
-        let query_buffer = Arc::new(GpuBuffer::new(
-            device.clone(),
-            GpuBufferType::Storage,
-            dim * std::mem::size_of::<f32>(),
-        ));
-
-        let query_buffer_uploader = Arc::new(GpuBuffer::new(
-            device.clone(),
-            GpuBufferType::CpuToGpu,
-            dim * std::mem::size_of::<f32>(),
-        ));
-
         let context = Context::new(device.clone());
         let scores_pipeline = Self::create_scores_pipeline(
             device.clone(),
@@ -129,7 +121,7 @@ impl KnnWorker {
             knn_uniform_buffer.clone(),
             query_buffer.clone(),
         );
-        let (take_best_pipelines_odd, take_best_pipelines_even) = Self::create_best_scores_pipeline(
+        let take_best_pipelines = Self::create_take_best_pipeline(
             device.clone(),
             scores_buffer_odd.clone(),
             scores_buffer_even.clone(),
@@ -150,10 +142,8 @@ impl KnnWorker {
             knn_uniform_buffer,
             knn_uniform_buffer_uploader,
             query_buffer,
-            query_buffer_uploader,
             scores_pipeline,
-            take_best_pipelines_odd,
-            take_best_pipelines_even,
+            take_best_pipelines,
         }
     }
 
@@ -189,12 +179,19 @@ impl KnnWorker {
         self.update_uniform_buffer(count + 1);
         self.flush();
         self.score_all();
-        self.take_best(count + 1);
 
-        let scores = self.download_best_scores(
-            self.scores_buffer_even.clone(),
-            (count + 1) * self.size / SORT_BLOCK_SIZE,
-        );
+        let scores = if count < 100000 {
+            self.take_best(count + 1);
+            self.download_best_scores(
+                self.scores_buffer_even.clone(),
+                (count + 1) * self.size / SORT_BLOCK_SIZE,
+            )
+        } else {
+            self.download_best_scores(
+                self.scores_buffer_odd.clone(),
+                self.capacity,
+            )
+        };
 
         let mut heap: BinaryHeap<Score> = BinaryHeap::new();
         for score in scores {
@@ -255,8 +252,7 @@ impl KnnWorker {
     }
 
     fn take_best(&mut self, _count: usize) {
-        self.context
-            .bind_pipeline(self.take_best_pipelines_odd.clone());
+        self.context.bind_pipeline(self.take_best_pipelines.clone());
         self.context.dispatch(self.size / SORT_BLOCK_SIZE, 1, 1);
         self.flush();
     }
@@ -294,9 +290,9 @@ impl KnnWorker {
     }
 
     fn update_query_buffer(&mut self, query: &[f32]) {
-        self.query_buffer_uploader.upload_slice(query, 0);
+        self.vector_data_upload_buffer.upload_slice(query, 0);
         self.context.copy_gpu_buffer(
-            self.query_buffer_uploader.clone(),
+            self.vector_data_upload_buffer.clone(),
             self.query_buffer.clone(),
             0,
             0,
@@ -335,12 +331,12 @@ impl KnnWorker {
             .build(device.clone())
     }
 
-    fn create_best_scores_pipeline(
+    fn create_take_best_pipeline(
         device: Arc<GpuDevice>,
         scores_buffer_odd: Arc<GpuBuffer>,
         scores_buffer_even: Arc<GpuBuffer>,
         knn_uniform_buffer: Arc<GpuBuffer>,
-    ) -> (Arc<Pipeline>, Arc<Pipeline>) {
+    ) -> Arc<Pipeline> {
         let shader = Arc::new(Shader::new(
             device.clone(),
             include_bytes!("../shaders/take_best.spv"),
@@ -356,28 +352,10 @@ impl KnnWorker {
             .add_storage_buffer(1, scores_buffer_odd.clone())
             .add_storage_buffer(2, scores_buffer_even.clone())
             .build();
-        let pipeline_odd = PipelineBuilder::new()
+        PipelineBuilder::new()
             .add_descriptor_set_layout(0, descriptor_set_layout.clone())
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader.clone())
-            .build(device.clone());
-
-        let descriptor_set_layout = DescriptorSetLayout::builder()
-            .add_uniform_buffer(0)
-            .add_storage_buffer(1)
-            .add_storage_buffer(2)
-            .build(device.clone());
-        let descriptor_set = DescriptorSet::builder(descriptor_set_layout.clone())
-            .add_uniform_buffer(0, knn_uniform_buffer)
-            .add_storage_buffer(1, scores_buffer_even.clone())
-            .add_storage_buffer(2, scores_buffer_odd.clone())
-            .build();
-        let pipeline_even = PipelineBuilder::new()
-            .add_descriptor_set_layout(0, descriptor_set_layout.clone())
-            .add_descriptor_set(0, descriptor_set.clone())
-            .add_shader(shader)
-            .build(device.clone());
-
-        (pipeline_odd, pipeline_even)
+            .build(device.clone())
     }
 }
