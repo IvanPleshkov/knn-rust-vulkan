@@ -90,10 +90,21 @@ impl GpuDevice {
         };
 
         unsafe {
-            let props = instance.vk_instance.get_physical_device_properties(vk_physical_device);
-            println!("maxComputeWorkGroupCount: {:?}", props.limits.max_compute_work_group_count);
-            println!("maxComputeWorkGroupSize: {:?}", props.limits.max_compute_work_group_size);
-            println!("maxComputeWorkGroupInvocations: {:?}", props.limits.max_compute_work_group_invocations);
+            let props = instance
+                .vk_instance
+                .get_physical_device_properties(vk_physical_device);
+            println!(
+                "maxComputeWorkGroupCount: {:?}",
+                props.limits.max_compute_work_group_count
+            );
+            println!(
+                "maxComputeWorkGroupSize: {:?}",
+                props.limits.max_compute_work_group_size
+            );
+            println!(
+                "maxComputeWorkGroupInvocations: {:?}",
+                props.limits.max_compute_work_group_invocations
+            );
         }
 
         let mut compute_queues = Vec::new();

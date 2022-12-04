@@ -44,11 +44,7 @@ impl Drop for GpuBuffer {
 }
 
 impl GpuBuffer {
-    pub fn new(
-        device: Arc<GpuDevice>,
-        buffer_type: GpuBufferType,
-        size: usize,
-    ) -> Self {
+    pub fn new(device: Arc<GpuDevice>, buffer_type: GpuBufferType, size: usize) -> Self {
         let (usage_flags, location) = match buffer_type {
             GpuBufferType::Uniform => (
                 vk::BufferUsageFlags::UNIFORM_BUFFER

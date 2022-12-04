@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BinaryHeap, sync::Arc};
 
 use crate::{
     context::Context,
@@ -13,6 +13,27 @@ use crate::{
 
 const BLOCK_SIZE: usize = 128;
 const SORT_BLOCK_SIZE: usize = 128;
+
+#[derive(PartialEq, Clone, Debug, Default)]
+#[repr(C)]
+pub struct Score {
+    pub index: u32,
+    pub score: f32,
+}
+
+impl Eq for Score {}
+
+impl std::cmp::PartialOrd for Score {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for Score {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.score.partial_cmp(&self.score).unwrap().reverse()
+    }
+}
 
 pub struct KnnWorker {
     dim: usize,
@@ -140,7 +161,7 @@ impl KnnWorker {
         if self.batched_count == self.batch_size {
             self.flush();
         }
-        self.size = std::cmp::max(self.size, idx);
+        self.size = std::cmp::max(self.size, idx + 1);
         let offset = self.batched_count * self.dim * std::mem::size_of::<f32>();
         self.vector_data_upload_buffer.upload_slice(vector, offset);
         self.context.copy_gpu_buffer(
@@ -163,16 +184,30 @@ impl KnnWorker {
         self.batched_count = 0;
     }
 
-    pub fn knn(&mut self, query: &[f32], count: usize) -> Vec<(u32, f32)> {
+    pub fn knn(&mut self, query: &[f32], count: usize) -> Vec<Score> {
         self.update_query_buffer(query);
         self.update_uniform_buffer(count + 1);
         self.flush();
         self.score_all();
         self.take_best(count + 1);
 
-        let mut scores = self.download_best_scores(self.scores_buffer_even.clone(), SORT_BLOCK_SIZE * (count + 1));
-        scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        scores.iter().take(count).cloned().collect()
+        let scores = self.download_best_scores(
+            self.scores_buffer_even.clone(),
+            (count + 1) * self.size / SORT_BLOCK_SIZE,
+        );
+
+        let mut heap: BinaryHeap<Score> = BinaryHeap::new();
+        for score in scores {
+            if heap.len() == count {
+                let mut top = heap.peek_mut().unwrap();
+                if top.score > score.score {
+                    *top = score;
+                }
+            } else {
+                heap.push(score);
+            }
+        }
+        heap.into_sorted_vec()
     }
 
     pub fn upload_vector_data(&mut self, data: &[f32]) {
@@ -209,28 +244,24 @@ impl KnnWorker {
         );
         self.flush();
         let mut result: Vec<f32> = vec![0.; self.dim * self.capacity];
-        vector_data_download_buffer
-            .download_slice(result.as_mut_slice(), 0);
+        vector_data_download_buffer.download_slice(result.as_mut_slice(), 0);
         result
     }
 
     fn score_all(&mut self) {
         self.context.bind_pipeline(self.scores_pipeline.clone());
-        self.context.dispatch(self.size / BLOCK_SIZE + 1, 1, 1);
+        self.context.dispatch(self.size / BLOCK_SIZE, 1, 1);
         self.flush();
     }
 
     fn take_best(&mut self, _count: usize) {
-        self.context.bind_pipeline(self.take_best_pipelines_odd.clone());
-        self.context.dispatch(self.size / SORT_BLOCK_SIZE + 1, 1, 1);
+        self.context
+            .bind_pipeline(self.take_best_pipelines_odd.clone());
+        self.context.dispatch(self.size / SORT_BLOCK_SIZE, 1, 1);
         self.flush();
     }
 
-    fn download_best_scores(
-        &mut self,
-        scores_buffer: Arc<GpuBuffer>,
-        count: usize,
-    ) -> Vec<(u32, f32)> {
+    fn download_best_scores(&mut self, scores_buffer: Arc<GpuBuffer>, count: usize) -> Vec<Score> {
         self.context.copy_gpu_buffer(
             scores_buffer,
             self.scores_download_buffer.clone(),
@@ -239,7 +270,7 @@ impl KnnWorker {
             count * (std::mem::size_of::<f32>() + std::mem::size_of::<u32>()),
         );
         self.flush();
-        let mut result: Vec<(u32, f32)> = vec![(0, 0.); count];
+        let mut result: Vec<Score> = vec![Default::default(); count];
         self.scores_download_buffer
             .download_slice(result.as_mut_slice(), 0);
         result
