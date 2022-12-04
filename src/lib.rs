@@ -10,4 +10,4 @@ pub mod pipeline;
 pub mod pipeline_builder;
 pub mod shader;
 
-pub trait GpuResource {}
+pub trait GpuResource: Send + Sync {}

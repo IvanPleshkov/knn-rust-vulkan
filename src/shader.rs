@@ -7,8 +7,10 @@ use std::sync::Arc;
 pub struct Shader {
     pub device: Arc<GpuDevice>,
     pub vk_shader_module: vk::ShaderModule,
-    pub vk_pipeline_shader_stage_create_info: vk::PipelineShaderStageCreateInfo,
 }
+
+unsafe impl Send for Shader {}
+unsafe impl Sync for Shader {}
 
 impl GpuResource for Shader {}
 
@@ -42,11 +44,14 @@ impl Shader {
         Self {
             device,
             vk_shader_module: shader_module,
-            vk_pipeline_shader_stage_create_info: vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::COMPUTE)
-                .module(shader_module)
-                .name(CStr::from_bytes_with_nul(b"main\0").unwrap())
-                .build(),
         }
+    }
+
+    pub(crate) fn get_pipeline_shader_stage_create_info(&self) -> vk::PipelineShaderStageCreateInfo {
+        vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::COMPUTE)
+                .module(self.vk_shader_module)
+                .name(CStr::from_bytes_with_nul(b"main\0").unwrap())
+                .build()
     }
 }

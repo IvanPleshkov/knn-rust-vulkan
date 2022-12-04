@@ -25,6 +25,9 @@ pub struct GpuBuffer {
     pub upload_mapped_ptr: Option<Mutex<NonNull<c_void>>>,
 }
 
+unsafe impl Send for GpuBuffer {}
+unsafe impl Sync for GpuBuffer {}
+
 impl GpuResource for GpuBuffer {}
 
 impl Drop for GpuBuffer {

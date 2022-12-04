@@ -17,6 +17,9 @@ pub struct Pipeline {
     pub(crate) vk_pipeline: vk::Pipeline,
 }
 
+unsafe impl Send for Pipeline {}
+unsafe impl Sync for Pipeline {}
+
 impl GpuResource for Pipeline {}
 
 impl Drop for Pipeline {
@@ -64,7 +67,7 @@ impl Pipeline {
             .shader
             .clone()
             .unwrap()
-            .vk_pipeline_shader_stage_create_info;
+            .get_pipeline_shader_stage_create_info();
 
         let vk_compute_pipeline_create_info = vk::ComputePipelineCreateInfo::builder()
             .stage(vk_pipeline_shader_stage_create_info)

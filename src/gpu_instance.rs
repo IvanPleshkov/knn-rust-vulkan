@@ -21,6 +21,9 @@ pub struct GpuInstance {
     vk_debug_messenger: vk::DebugUtilsMessengerEXT,
 }
 
+unsafe impl Send for GpuInstance {}
+unsafe impl Sync for GpuInstance {}
+
 #[derive(Debug)]
 pub enum GpuDeviceError {}
 
