@@ -37,6 +37,7 @@ Score heap_data[8];
 #define BHEAP_CMP(a, b) a.score > b.score
 #include "bheap.comp"
 
+float positive_infinity = 1.0 / 0.0;
 
 void main()
 {
@@ -46,6 +47,9 @@ void main()
 #else
     bheap_offset = 0;
 #endif
+    for (uint i = 0; i < knn.k; i++) {
+        BHEAP_DATA[bheap_offset + i].score = positive_infinity;
+    }
 
     for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
         uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
@@ -53,12 +57,15 @@ void main()
         for (uint i = 0; i < knn.dim; i++) {
             score += vectors.data[pointId * knn.dim + i] * query.data[i];
         }
-        if (bheap_size == bheap_capacity) {
-            if (score < bheap_top().score) {
-                bheap_change_top(Score(pointId, score));
+        // check if not nan
+        if (score < 0.0 || 0.0 < score || score == 0.0) {
+            if (bheap_size == bheap_capacity) {
+                if (score < bheap_top().score) {
+                    bheap_change_top(Score(pointId, score));
             }
-        } else {
-            bheap_push(Score(pointId, score));
+            } else {
+                bheap_push(Score(pointId, score));
+            }
         }
     }
 

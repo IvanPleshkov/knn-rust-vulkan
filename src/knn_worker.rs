@@ -30,7 +30,7 @@ impl std::cmp::PartialOrd for Score {
 
 impl std::cmp::Ord for Score {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.score.partial_cmp(&self.score).unwrap().reverse()
+        self.score.partial_cmp(&other.score).unwrap()
     }
 }
 
@@ -61,7 +61,7 @@ struct KnnUniformBuffer {
 
 impl KnnWorker {
     pub fn new(device: Arc<GpuDevice>, dim: usize, capacity: usize) -> Self {
-        let batch_size = 1024;
+        let batch_size = 128;
         let query_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
             GpuBufferType::Storage,
@@ -104,7 +104,7 @@ impl KnnWorker {
             std::mem::size_of::<KnnUniformBuffer>(),
         ));
 
-        let context = Context::new(device.clone());
+        let mut context = Context::new(device.clone());
         let scores_pipeline = Self::create_scores_pipeline(
             device.clone(),
             vector_data_buffer.clone(),
@@ -112,6 +112,15 @@ impl KnnWorker {
             knn_uniform_buffer.clone(),
             query_buffer.clone(),
         );
+
+        Self::fill_vector_data(
+            capacity,
+            dim,
+            batch_size,
+            vector_data_buffer.clone(),
+            vector_data_upload_buffer.clone(),
+            &mut context);
+
         Self {
             dim,
             size: 0,
@@ -147,8 +156,9 @@ impl KnnWorker {
         self.batched_count += 1;
     }
 
-    pub fn remove_vector(&mut self, _vector: &[f32], _idx: u32) {
-        unimplemented!()
+    pub fn remove_vector(&mut self, idx: usize) {
+        let nan_vec = vec![f32::NAN; self.dim];
+        self.add_vector(&nan_vec, idx);
     }
 
     pub fn flush(&mut self) {
@@ -165,7 +175,7 @@ impl KnnWorker {
 
         let scores = self.download_best_scores(
                 self.scores_buffer.clone(),
-                (count + 1) * self.size / BLOCK_SIZE,
+                (count + 1) * self.capacity / BLOCK_SIZE,
             );
 
         let mut heap: BinaryHeap<Score> = BinaryHeap::new();
@@ -222,7 +232,7 @@ impl KnnWorker {
 
     fn score_all(&mut self) {
         self.context.bind_pipeline(self.pipeline.clone());
-        self.context.dispatch(self.size / BLOCK_SIZE, 1, 1);
+        self.context.dispatch(self.capacity / BLOCK_SIZE, 1, 1);
         self.flush();
     }
 
@@ -298,5 +308,28 @@ impl KnnWorker {
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader)
             .build(device.clone())
+    }
+
+    fn fill_vector_data(
+        capacity: usize,
+        dim: usize,
+        batch_size: usize,
+        vector_data_buffer: Arc<GpuBuffer>,
+        vector_data_upload_buffer: Arc<GpuBuffer>,
+        context: &mut Context,
+    ) {
+        let batch_data = vec![f32::NAN; dim * batch_size];
+        vector_data_upload_buffer.upload_slice(batch_data.as_slice(), 0);
+        for i in 0..capacity / batch_size {
+            context.copy_gpu_buffer(
+                vector_data_upload_buffer.clone(),
+                vector_data_buffer.clone(),
+                0,
+                i * batch_size * dim * std::mem::size_of::<f32>(),
+                batch_size * dim * std::mem::size_of::<f32>(),
+            );
+            context.run();
+            context.wait_finish();
+        }
     }
 }

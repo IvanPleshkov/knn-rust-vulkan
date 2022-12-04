@@ -18,9 +18,9 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 fn main() {
-    let vectors_count = 1024;
+    let vectors_count = 1024 * 1024;
     //let vectors_count = 64 * 63;
-    let vector_dim = 64;
+    let vector_dim = 512;
     let k = 5;
 
     let debug_messenger = PanicIfErrorMessenger {};
@@ -53,7 +53,7 @@ fn main() {
     let timer = std::time::Instant::now();
     let result = knn_worker.knn(&query, k);
     println!("finish searching gpu in {:?}", timer.elapsed());
-    println!("result: {:?}", result);
+    println!("gpu result: {:?}", result);
 
     println!("start searching cpu");
     let timer = std::time::Instant::now();
@@ -76,7 +76,7 @@ fn main() {
         heap.into_sorted_vec()
     };
     println!("finish searching cpu in {:?}", timer.elapsed());
-    println!("orig: {:?}", scores);
+    println!("cpu result: {:?}", scores);
 
     let idx1 = result.iter().map(|x| x.index).collect::<Vec<_>>();
     let idx2 = scores.iter().map(|x| x.index).collect::<Vec<_>>();
