@@ -14,8 +14,10 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 fn main() {
-    let vectors_count = 128 * 4;
-    let vector_dim = 512;
+    let vectors_count = 128 * 128;
+    let vector_dim = 32;
+    let k = 16;
+
     let debug_messenger = PanicIfErrorMessenger {};
     let instance = Arc::new(GpuInstance::new("KNN vulkan", Some(&debug_messenger), false).unwrap());
     let device =
@@ -39,13 +41,19 @@ fn main() {
     println!("finish adding vectors");
 
     let query: Vec<f32> = (0..vector_dim).map(|_| rng.gen()).collect();
-    let result = knn_worker.knn(&query, vectors_count);
-
+    let result = knn_worker.knn(&query, k);
     println!("result: {:?}", result);
 
-    for (i, v) in list.iter().enumerate() {
-        println!("({}, {})", i, (dot(&query, v) - result[i].1).abs());
-    }
+    let mut scores: Vec<(usize, f32)> = list.iter().enumerate().map(|(i, v)| {
+        (i, dot(&v, &query))
+    }).collect();
+    scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    scores = scores.iter().take(k).cloned().collect();
+    println!("orig: {:?}", scores);
+
+    let idx1 = result.iter().map(|x| x.0 as usize).collect::<Vec<_>>();
+    let idx2 = scores.iter().map(|x| x.0).collect::<Vec<_>>();
+    assert_eq!(idx1, idx2);
 
     println!("finish query vectors");
 }

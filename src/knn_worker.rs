@@ -12,6 +12,7 @@ use crate::{
 };
 
 const BLOCK_SIZE: usize = 128;
+const SORT_BLOCK_SIZE: usize = 128;
 
 pub struct KnnWorker {
     dim: usize,
@@ -22,13 +23,16 @@ pub struct KnnWorker {
     context: Context,
     vector_data_buffer: Arc<GpuBuffer>,
     vector_data_upload_buffer: Arc<GpuBuffer>,
-    scores_buffer: Arc<GpuBuffer>,
+    scores_buffer_odd: Arc<GpuBuffer>,
+    scores_buffer_even: Arc<GpuBuffer>,
     scores_download_buffer: Arc<GpuBuffer>,
     knn_uniform_buffer: Arc<GpuBuffer>,
     knn_uniform_buffer_uploader: Arc<GpuBuffer>,
     query_buffer: Arc<GpuBuffer>,
     query_buffer_uploader: Arc<GpuBuffer>,
     scores_pipeline: Arc<Pipeline>,
+    take_best_pipelines_odd: Arc<Pipeline>,
+    take_best_pipelines_even: Arc<Pipeline>,
 }
 
 #[repr(C)]
@@ -36,7 +40,7 @@ struct KnnUniformBuffer {
     dim: u32,
     capacity: u32,
     block_size: u32,
-    threads_count: u32,
+    k: u32,
 }
 
 impl KnnWorker {
@@ -56,7 +60,14 @@ impl KnnWorker {
             batch_size * dim * std::mem::size_of::<f32>(),
         ));
 
-        let scores_buffer = Arc::new(GpuBuffer::new(
+        let scores_buffer_odd = Arc::new(GpuBuffer::new(
+            device.clone(),
+            "Scores",
+            GpuBufferType::Storage,
+            capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
+        ));
+
+        let scores_buffer_even = Arc::new(GpuBuffer::new(
             device.clone(),
             "Scores",
             GpuBufferType::Storage,
@@ -102,9 +113,15 @@ impl KnnWorker {
         let scores_pipeline = Self::create_scores_pipeline(
             device.clone(),
             vector_data_buffer.clone(),
-            scores_buffer.clone(),
+            scores_buffer_odd.clone(),
             knn_uniform_buffer.clone(),
             query_buffer.clone(),
+        );
+        let (take_best_pipelines_odd, take_best_pipelines_even) = Self::create_best_scores_pipeline(
+            device.clone(),
+            scores_buffer_odd.clone(),
+            scores_buffer_even.clone(),
+            knn_uniform_buffer.clone(),
         );
         Self {
             dim,
@@ -115,13 +132,16 @@ impl KnnWorker {
             context,
             vector_data_buffer,
             vector_data_upload_buffer,
-            scores_buffer,
+            scores_buffer_odd,
+            scores_buffer_even,
             scores_download_buffer,
             knn_uniform_buffer,
             knn_uniform_buffer_uploader,
             query_buffer,
             query_buffer_uploader,
             scores_pipeline,
+            take_best_pipelines_odd,
+            take_best_pipelines_even,
         }
     }
 
@@ -154,10 +174,14 @@ impl KnnWorker {
 
     pub fn knn(&mut self, query: &[f32], count: usize) -> Vec<(u32, f32)> {
         self.update_query_buffer(query);
-        self.update_uniform_buffer();
+        self.update_uniform_buffer(count + 1);
         self.flush();
         self.score_all();
-        self.take_best_scores(count)
+        self.take_best(count + 1);
+    
+        let mut scores = self.download_best_scores(self.scores_buffer_even.clone(), SORT_BLOCK_SIZE * (count + 1));
+        scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        scores.iter().take(count).cloned().collect()
     }
 
     pub fn upload_vector_data(&mut self, data: &[f32]) {
@@ -206,13 +230,22 @@ impl KnnWorker {
         self.context.dispatch(self.size / BLOCK_SIZE + 1, 1, 1);
     }
 
-    fn take_best_scores(&mut self, count: usize) -> Vec<(u32, f32)> {
+    fn take_best(&mut self, _count: usize) {
+        self.context.bind_pipeline(self.take_best_pipelines_odd.clone());
+        self.context.dispatch(self.size / SORT_BLOCK_SIZE + 1, 1, 1);
+    }
+
+    fn download_best_scores(
+        &mut self,
+        scores_buffer: Arc<GpuBuffer>,
+        count: usize,
+    ) -> Vec<(u32, f32)> {
         self.context.copy_gpu_buffer(
-            self.scores_buffer.clone(),
+            scores_buffer,
             self.scores_download_buffer.clone(),
             0,
             0,
-            self.scores_buffer.size,
+            count * (std::mem::size_of::<f32>() + std::mem::size_of::<u32>()),
         );
         self.flush();
         let mut result: Vec<(u32, f32)> = vec![(0, 0.); count];
@@ -221,12 +254,12 @@ impl KnnWorker {
         result
     }
 
-    fn update_uniform_buffer(&mut self) {
+    fn update_uniform_buffer(&mut self, count: usize) {
         let uniform_buffer = KnnUniformBuffer {
             dim: self.dim as u32,
             capacity: self.capacity as u32,
             block_size: BLOCK_SIZE as u32,
-            threads_count: self.capacity as u32 / BLOCK_SIZE as u32,
+            k: count as u32,
         };
         self.knn_uniform_buffer_uploader.upload(&uniform_buffer, 0);
         self.context.copy_gpu_buffer(
@@ -279,5 +312,52 @@ impl KnnWorker {
             .add_descriptor_set(0, descriptor_set.clone())
             .add_shader(shader)
             .build(device.clone(), "dot distances score")
+    }
+
+    fn create_best_scores_pipeline(
+        device: Arc<GpuDevice>,
+        scores_buffer_odd: Arc<GpuBuffer>,
+        scores_buffer_even: Arc<GpuBuffer>,
+        knn_uniform_buffer: Arc<GpuBuffer>,
+    ) -> (Arc<Pipeline>, Arc<Pipeline>) {
+        let shader = Arc::new(Shader::new(
+            device.clone(),
+            "take_best",
+            include_bytes!("../shaders/take_best.spv"),
+        ));
+
+        let descriptor_set_layout = DescriptorSetLayout::builder()
+            .add_uniform_buffer(0)
+            .add_storage_buffer(1)
+            .add_storage_buffer(2)
+            .build(device.clone());
+        let descriptor_set = DescriptorSet::builder(descriptor_set_layout.clone())
+            .add_uniform_buffer(0, knn_uniform_buffer.clone())
+            .add_storage_buffer(1, scores_buffer_odd.clone())
+            .add_storage_buffer(2, scores_buffer_even.clone())
+            .build();
+        let pipeline_odd = PipelineBuilder::new()
+            .add_descriptor_set_layout(0, descriptor_set_layout.clone())
+            .add_descriptor_set(0, descriptor_set.clone())
+            .add_shader(shader.clone())
+            .build(device.clone(), "dot distances score");
+
+        let descriptor_set_layout = DescriptorSetLayout::builder()
+            .add_uniform_buffer(0)
+            .add_storage_buffer(1)
+            .add_storage_buffer(2)
+            .build(device.clone());
+        let descriptor_set = DescriptorSet::builder(descriptor_set_layout.clone())
+            .add_uniform_buffer(0, knn_uniform_buffer)
+            .add_storage_buffer(1, scores_buffer_even.clone())
+            .add_storage_buffer(2, scores_buffer_odd.clone())
+            .build();
+        let pipeline_even = PipelineBuilder::new()
+            .add_descriptor_set_layout(0, descriptor_set_layout.clone())
+            .add_descriptor_set(0, descriptor_set.clone())
+            .add_shader(shader)
+            .build(device.clone(), "dot distances score");
+
+        (pipeline_odd, pipeline_even)
     }
 }

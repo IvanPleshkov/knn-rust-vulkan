@@ -5,7 +5,7 @@ layout(binding = 0) uniform KnnUniformBuffer {
     uint dim;
     uint capacity;
     uint block_size;
-    uint threads_count;
+    uint k;
 } knn;
 
 layout(binding = 1) buffer VectorData {

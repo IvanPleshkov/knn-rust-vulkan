@@ -1,0 +1,41 @@
+#version 450
+
+struct Score {
+    uint idx;
+    float score;
+};
+
+layout(binding = 0) uniform KnnUniformBuffer {
+    uint dim;
+    uint capacity;
+    uint block_size;
+    uint k;
+} knn;
+
+layout(binding = 1) buffer ScoresSrc {
+    Score data[];
+} scoresSrc;
+
+layout(binding = 2) buffer ScoresDst {
+    Score data[];
+} scoresDst;
+
+#define BHEAP_NAME scoresDst.data
+#define BHEAP_TYPE Score
+#define BHEAP_CMP(a, b) a.score > b.score
+#include "bheap.comp"
+
+void main()
+{
+    bheap_capacity = knn.k;
+    bheap_offset = gl_GlobalInvocationID.x * knn.k;
+    for (uint relativePointId = 0; relativePointId < knn.block_size - 1; relativePointId++) {
+        uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
+        bheap_push(scoresSrc.data[pointId]);
+        if (bheap_size == bheap_capacity) {
+            bheap_pop();
+        }
+    }
+    uint pointId = gl_GlobalInvocationID.x * knn.block_size + knn.block_size - 1;
+    bheap_push(scoresSrc.data[pointId]);
+}
