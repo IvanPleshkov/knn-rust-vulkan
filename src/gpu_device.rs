@@ -60,8 +60,6 @@ impl GpuDevice {
             .collect();
 
         let physical_device_features = vk::PhysicalDeviceFeatures {
-            fill_mode_non_solid: vk::TRUE,
-            sampler_anisotropy: vk::TRUE,
             ..Default::default()
         };
 
@@ -90,6 +88,13 @@ impl GpuDevice {
                 instance.alloc.as_ref(),
             )
         };
+
+        unsafe {
+            let props = instance.vk_instance.get_physical_device_properties(vk_physical_device);
+            println!("maxComputeWorkGroupCount: {:?}", props.limits.max_compute_work_group_count);
+            println!("maxComputeWorkGroupSize: {:?}", props.limits.max_compute_work_group_size);
+            println!("maxComputeWorkGroupInvocations: {:?}", props.limits.max_compute_work_group_invocations);
+        }
 
         let mut compute_queues = Vec::new();
         let mut transfer_queues = Vec::new();
