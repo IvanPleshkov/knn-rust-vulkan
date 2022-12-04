@@ -169,7 +169,7 @@ impl KnnWorker {
         self.flush();
         self.score_all();
         self.take_best(count + 1);
-    
+
         let mut scores = self.download_best_scores(self.scores_buffer_even.clone(), SORT_BLOCK_SIZE * (count + 1));
         scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
         scores.iter().take(count).cloned().collect()
@@ -217,11 +217,13 @@ impl KnnWorker {
     fn score_all(&mut self) {
         self.context.bind_pipeline(self.scores_pipeline.clone());
         self.context.dispatch(self.size / BLOCK_SIZE + 1, 1, 1);
+        self.flush();
     }
 
     fn take_best(&mut self, _count: usize) {
         self.context.bind_pipeline(self.take_best_pipelines_odd.clone());
         self.context.dispatch(self.size / SORT_BLOCK_SIZE + 1, 1, 1);
+        self.flush();
     }
 
     fn download_best_scores(
