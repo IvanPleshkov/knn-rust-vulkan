@@ -45,10 +45,13 @@ BHEAP_TYPE bheap_top() {
     return BHEAP_DATA[bheap_offset];
 }
 
-BHEAP_TYPE bheap_pop() {
-    BHEAP_TYPE pop_result = BHEAP_DATA[bheap_offset];
+void bheap_pop() {
     bheap_size--;
     BHEAP_DATA[bheap_offset] = BHEAP_DATA[bheap_offset + bheap_size];
     _sift_down(0);
-    return pop_result;
+}
+
+void bheap_change_top(BHEAP_TYPE new_value) {
+    BHEAP_DATA[bheap_offset] = new_value;
+    _sift_down(0);
 }

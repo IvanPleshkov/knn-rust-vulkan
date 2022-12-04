@@ -1,6 +1,12 @@
 #version 450
 
-//layout (local_size_x = 16, local_size_y = 16) in;
+#define LARGE_K
+
+struct Score {
+    uint idx;
+    float score;
+};
+
 layout(binding = 0) uniform KnnUniformBuffer {
     uint dim;
     uint capacity;
@@ -16,23 +22,49 @@ layout(binding = 2) buffer QueryData {
     float data[];
 } query;
 
-struct Score {
-    uint idx;
-    float score;
-};
-
 layout(binding = 3) buffer ScoresData {
     Score data[];
 } scores;
 
+
+#ifdef LARGE_K
+#define BHEAP_DATA scores.data
+#else
+Score heap_data[8];
+#define BHEAP_DATA heap_data
+#endif
+#define BHEAP_TYPE Score
+#define BHEAP_CMP(a, b) a.score > b.score
+#include "bheap.comp"
+
+
 void main()
 {
+    bheap_capacity = knn.k;
+#ifdef LARGE_K
+    bheap_offset = gl_GlobalInvocationID.x * knn.k;
+#else
+    bheap_offset = 0;
+#endif
+
     for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
         uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
         float score = 0.0;
         for (uint i = 0; i < knn.dim; i++) {
             score += vectors.data[pointId * knn.dim + i] * query.data[i];
         }
-        scores.data[pointId] = Score(pointId, score);
+        if (bheap_size == bheap_capacity) {
+            if (score < bheap_top().score) {
+                bheap_change_top(Score(pointId, score));
+            }
+        } else {
+            bheap_push(Score(pointId, score));
+        }
     }
+
+#ifndef LARGE_K
+    for (uint i = 0; i < knn.k; i++) {
+        scores.data[gl_GlobalInvocationID.x * knn.k + i] = heap_data[i];
+    }
+#endif
 }

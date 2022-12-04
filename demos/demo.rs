@@ -18,7 +18,7 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 fn main() {
-    let vectors_count = 1024 * 1024;
+    let vectors_count = 1024;
     //let vectors_count = 64 * 63;
     let vector_dim = 64;
     let k = 5;
