@@ -62,7 +62,7 @@ void main()
             if (bheap_size == bheap_capacity) {
                 if (score < bheap_top().score) {
                     bheap_change_top(Score(pointId, score));
-            }
+                }
             } else {
                 bheap_push(Score(pointId, score));
             }
