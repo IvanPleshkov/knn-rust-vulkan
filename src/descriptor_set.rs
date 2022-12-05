@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::{
     descriptor_set_layout::DescriptorSetLayout, gpu_buffer::GpuBuffer, gpu_device::GpuDevice,
+    GpuResource,
 };
 
 pub struct DescriptorBuilder {
@@ -20,6 +21,8 @@ pub struct DescriptorSet {
     pub vk_descriptor_pool: vk::DescriptorPool,
     pub vk_descriptor_set: vk::DescriptorSet,
 }
+
+impl GpuResource for DescriptorSet {}
 
 impl DescriptorBuilder {
     pub fn add_uniform_buffer(mut self, binding: usize, uniform_buffer: Arc<GpuBuffer>) -> Self {

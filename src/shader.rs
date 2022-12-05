@@ -47,11 +47,13 @@ impl Shader {
         }
     }
 
-    pub(crate) fn get_pipeline_shader_stage_create_info(&self) -> vk::PipelineShaderStageCreateInfo {
+    pub(crate) fn get_pipeline_shader_stage_create_info(
+        &self,
+    ) -> vk::PipelineShaderStageCreateInfo {
         vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::COMPUTE)
-                .module(self.vk_shader_module)
-                .name(CStr::from_bytes_with_nul(b"main\0").unwrap())
-                .build()
+            .stage(vk::ShaderStageFlags::COMPUTE)
+            .module(self.vk_shader_module)
+            .name(CStr::from_bytes_with_nul(b"main\0").unwrap())
+            .build()
     }
 }

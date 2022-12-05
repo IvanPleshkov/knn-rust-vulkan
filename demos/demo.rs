@@ -18,17 +18,16 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 fn main() {
-    let vectors_count = 1024 * 1024;
+    let vectors_count = 128 * 1024;
     //let vectors_count = 64 * 63;
-    let vector_dim = 512;
+    let vector_dim = 64;
     let k = 5;
 
     let debug_messenger = PanicIfErrorMessenger {};
     let instance = Arc::new(GpuInstance::new("KNN vulkan", Some(&debug_messenger), false).unwrap());
     let device =
         Arc::new(GpuDevice::new(instance.clone(), instance.vk_physical_devices[0]).unwrap());
-    let mut knn_worker =
-        knn_rust_vulkan::knn_worker::KnnWorker::new(device.clone(), vector_dim, vectors_count);
+    let mut knn_worker = knn_rust_vulkan::knn_worker::KnnWorker::new(device.clone(), vector_dim);
 
     println!("Generate data");
     let mut rng = rand::thread_rng();
@@ -47,40 +46,43 @@ fn main() {
     println!("uploading vectors time {:?}", timer.elapsed());
     println!("finish adding vectors");
 
-    let query: Vec<f32> = (0..vector_dim).map(|_| rng.gen()).collect();
+    for i in 0..100 {
+        println!("{}", i);
+        let query: Vec<f32> = (0..vector_dim).map(|_| rng.gen()).collect();
 
-    println!("start searching gpu");
-    let timer = std::time::Instant::now();
-    let result = knn_worker.knn(&query, k);
-    println!("finish searching gpu in {:?}", timer.elapsed());
-    println!("gpu result: {:?}", result);
+        println!("start searching gpu");
+        let timer = std::time::Instant::now();
+        let result = knn_worker.knn(&query, k);
+        println!("finish searching gpu in {:?}", timer.elapsed());
+        println!("gpu result: {:?}", result);
 
-    println!("start searching cpu");
-    let timer = std::time::Instant::now();
-    let scores: Vec<Score> = {
-        let mut heap: BinaryHeap<Score> = BinaryHeap::new();
-        for (i, v) in list.iter().enumerate() {
-            let score = Score {
-                score: dot(&query, &v),
-                index: i as u32,
-            };
-            if heap.len() == k {
-                let mut top = heap.peek_mut().unwrap();
-                if top.score > score.score {
-                    *top = score;
+        println!("start searching cpu");
+        let timer = std::time::Instant::now();
+        let scores: Vec<Score> = {
+            let mut heap: BinaryHeap<Score> = BinaryHeap::new();
+            for (i, v) in list.iter().enumerate() {
+                let score = Score {
+                    score: dot(&query, &v),
+                    index: i as u32,
+                };
+                if heap.len() == k {
+                    let mut top = heap.peek_mut().unwrap();
+                    if top.score > score.score {
+                        *top = score;
+                    }
+                } else {
+                    heap.push(score);
                 }
-            } else {
-                heap.push(score);
             }
-        }
-        heap.into_sorted_vec()
-    };
-    println!("finish searching cpu in {:?}", timer.elapsed());
-    println!("cpu result: {:?}", scores);
+            heap.into_sorted_vec()
+        };
+        println!("finish searching cpu in {:?}", timer.elapsed());
+        println!("cpu result: {:?}", scores);
 
-    let idx1 = result.iter().map(|x| x.index).collect::<Vec<_>>();
-    let idx2 = scores.iter().map(|x| x.index).collect::<Vec<_>>();
-    assert_eq!(idx1, idx2);
+        let idx1 = result.iter().map(|x| x.index).collect::<Vec<_>>();
+        let idx2 = scores.iter().map(|x| x.index).collect::<Vec<_>>();
+        assert_eq!(idx1, idx2);
+    }
 
     println!("finish query vectors");
 }

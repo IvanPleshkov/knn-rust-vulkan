@@ -40,6 +40,7 @@ pub struct KnnWorker {
     capacity: usize,
     batch_size: usize,
     batched_count: usize,
+    device: Arc<GpuDevice>,
     context: Context,
     vector_data_buffer: Arc<GpuBuffer>,
     vector_data_upload_buffer: Arc<GpuBuffer>,
@@ -48,6 +49,8 @@ pub struct KnnWorker {
     knn_uniform_buffer: Arc<GpuBuffer>,
     knn_uniform_buffer_uploader: Arc<GpuBuffer>,
     query_buffer: Arc<GpuBuffer>,
+    descriptor_set_layout: Arc<DescriptorSetLayout>,
+    descriptor_set: Arc<DescriptorSet>,
     pipeline: Arc<Pipeline>,
 }
 
@@ -60,7 +63,8 @@ struct KnnUniformBuffer {
 }
 
 impl KnnWorker {
-    pub fn new(device: Arc<GpuDevice>, dim: usize, capacity: usize) -> Self {
+    pub fn new(device: Arc<GpuDevice>, dim: usize) -> Self {
+        let capacity = 4096;
         let batch_size = 128;
         let query_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
@@ -68,16 +72,16 @@ impl KnnWorker {
             dim * std::mem::size_of::<f32>(),
         ));
 
-        let vector_data_buffer = Arc::new(GpuBuffer::new(
-            device.clone(),
-            GpuBufferType::Storage,
-            capacity * dim * std::mem::size_of::<f32>(),
-        ));
-
         let vector_data_upload_buffer = Arc::new(GpuBuffer::new(
             device.clone(),
             GpuBufferType::CpuToGpu,
             batch_size * dim * std::mem::size_of::<f32>(),
+        ));
+
+        let vector_data_buffer = Arc::new(GpuBuffer::new(
+            device.clone(),
+            GpuBufferType::Storage,
+            capacity * dim * std::mem::size_of::<f32>(),
         ));
 
         let scores_buffer = Arc::new(GpuBuffer::new(
@@ -104,22 +108,39 @@ impl KnnWorker {
             std::mem::size_of::<KnnUniformBuffer>(),
         ));
 
-        let mut context = Context::new(device.clone());
-        let scores_pipeline = Self::create_scores_pipeline(
-            device.clone(),
-            vector_data_buffer.clone(),
-            scores_buffer.clone(),
-            knn_uniform_buffer.clone(),
-            query_buffer.clone(),
-        );
+        let descriptor_set_layout = DescriptorSetLayout::builder()
+            .add_uniform_buffer(0)
+            .add_storage_buffer(1)
+            .add_storage_buffer(2)
+            .add_storage_buffer(3)
+            .build(device.clone());
 
+        let descriptor_set = DescriptorSet::builder(descriptor_set_layout.clone())
+            .add_uniform_buffer(0, knn_uniform_buffer.clone())
+            .add_storage_buffer(1, vector_data_buffer.clone())
+            .add_storage_buffer(2, query_buffer.clone())
+            .add_storage_buffer(3, scores_buffer.clone())
+            .build();
+
+        let shader = Arc::new(Shader::new(
+            device.clone(),
+            include_bytes!("../shaders/compute_dot_scores.spv"),
+        ));
+
+        let pipeline = PipelineBuilder::new()
+            .add_descriptor_set_layout(0, descriptor_set_layout.clone())
+            .add_shader(shader.clone())
+            .build(device.clone());
+
+        let mut context = Context::new(device.clone());
         Self::fill_vector_data(
             capacity,
             dim,
             batch_size,
             vector_data_buffer.clone(),
             vector_data_upload_buffer.clone(),
-            &mut context);
+            &mut context,
+        );
 
         Self {
             dim,
@@ -127,6 +148,7 @@ impl KnnWorker {
             capacity,
             batch_size,
             batched_count: 0,
+            device,
             context,
             vector_data_buffer,
             vector_data_upload_buffer,
@@ -135,11 +157,16 @@ impl KnnWorker {
             knn_uniform_buffer,
             knn_uniform_buffer_uploader,
             query_buffer,
-            pipeline: scores_pipeline,
+            descriptor_set_layout,
+            descriptor_set,
+            pipeline,
         }
     }
 
     pub fn add_vector(&mut self, vector: &[f32], idx: usize) {
+        while idx >= self.capacity {
+            self.realloc();
+        }
         if self.batched_count == self.batch_size {
             self.flush();
         }
@@ -157,8 +184,10 @@ impl KnnWorker {
     }
 
     pub fn remove_vector(&mut self, idx: usize) {
-        let nan_vec = vec![f32::NAN; self.dim];
-        self.add_vector(&nan_vec, idx);
+        if idx < self.size {
+            let nan_vec = vec![f32::NAN; self.dim];
+            self.add_vector(&nan_vec, idx);
+        }
     }
 
     pub fn flush(&mut self) {
@@ -174,9 +203,9 @@ impl KnnWorker {
         self.score_all();
 
         let scores = self.download_best_scores(
-                self.scores_buffer.clone(),
-                (count + 1) * self.capacity / BLOCK_SIZE,
-            );
+            self.scores_buffer.clone(),
+            (count + 1) * self.capacity / BLOCK_SIZE,
+        );
 
         let mut heap: BinaryHeap<Score> = BinaryHeap::new();
         for score in scores {
@@ -231,7 +260,8 @@ impl KnnWorker {
     }
 
     fn score_all(&mut self) {
-        self.context.bind_pipeline(self.pipeline.clone());
+        self.context
+            .bind_pipeline(self.pipeline.clone(), &[self.descriptor_set.clone()]);
         self.context.dispatch(self.capacity / BLOCK_SIZE, 1, 1);
         self.flush();
     }
@@ -279,37 +309,6 @@ impl KnnWorker {
         );
     }
 
-    fn create_scores_pipeline(
-        device: Arc<GpuDevice>,
-        vector_data_buffer: Arc<GpuBuffer>,
-        scores_buffer: Arc<GpuBuffer>,
-        knn_uniform_buffer: Arc<GpuBuffer>,
-        query_buffer: Arc<GpuBuffer>,
-    ) -> Arc<Pipeline> {
-        let shader = Arc::new(Shader::new(
-            device.clone(),
-            include_bytes!("../shaders/compute_dot_scores.spv"),
-        ));
-
-        let descriptor_set_layout = DescriptorSetLayout::builder()
-            .add_uniform_buffer(0)
-            .add_storage_buffer(1)
-            .add_storage_buffer(2)
-            .add_storage_buffer(3)
-            .build(device.clone());
-        let descriptor_set = DescriptorSet::builder(descriptor_set_layout.clone())
-            .add_uniform_buffer(0, knn_uniform_buffer)
-            .add_storage_buffer(1, vector_data_buffer)
-            .add_storage_buffer(2, query_buffer)
-            .add_storage_buffer(3, scores_buffer)
-            .build();
-        PipelineBuilder::new()
-            .add_descriptor_set_layout(0, descriptor_set_layout.clone())
-            .add_descriptor_set(0, descriptor_set.clone())
-            .add_shader(shader)
-            .build(device.clone())
-    }
-
     fn fill_vector_data(
         capacity: usize,
         dim: usize,
@@ -328,8 +327,62 @@ impl KnnWorker {
                 i * batch_size * dim * std::mem::size_of::<f32>(),
                 batch_size * dim * std::mem::size_of::<f32>(),
             );
-            context.run();
-            context.wait_finish();
         }
+        context.run();
+        context.wait_finish();
+    }
+
+    fn realloc(&mut self) {
+        self.flush();
+
+        self.capacity *= 2;
+        let old_vector_data_buffer = self.vector_data_buffer.clone();
+        self.vector_data_buffer = Arc::new(GpuBuffer::new(
+            self.device.clone(),
+            GpuBufferType::Storage,
+            self.capacity * self.dim * std::mem::size_of::<f32>(),
+        ));
+
+        self.scores_buffer = Arc::new(GpuBuffer::new(
+            self.device.clone(),
+            GpuBufferType::Storage,
+            self.capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
+        ));
+
+        self.scores_download_buffer = Arc::new(GpuBuffer::new(
+            self.device.clone(),
+            GpuBufferType::GpuToCpu,
+            self.capacity * (std::mem::size_of::<f32>() + std::mem::size_of::<i32>()),
+        ));
+
+        self.descriptor_set = DescriptorSet::builder(self.descriptor_set_layout.clone())
+            .add_uniform_buffer(0, self.knn_uniform_buffer.clone())
+            .add_storage_buffer(1, self.vector_data_buffer.clone())
+            .add_storage_buffer(2, self.query_buffer.clone())
+            .add_storage_buffer(3, self.scores_buffer.clone())
+            .build();
+
+        let batch_data = vec![f32::NAN; self.dim * self.batch_size];
+        self.vector_data_upload_buffer
+            .upload_slice(batch_data.as_slice(), 0);
+        for i in self.capacity / (2 * self.batch_size)..self.capacity / self.batch_size {
+            self.context.copy_gpu_buffer(
+                self.vector_data_upload_buffer.clone(),
+                self.vector_data_buffer.clone(),
+                0,
+                i * self.batch_size * self.dim * std::mem::size_of::<f32>(),
+                self.batch_size * self.dim * std::mem::size_of::<f32>(),
+            );
+        }
+        self.context.copy_gpu_buffer(
+            old_vector_data_buffer,
+            self.vector_data_buffer.clone(),
+            0,
+            0,
+            self.vector_data_buffer.size / 2,
+        );
+
+        self.context.run();
+        self.context.wait_finish();
     }
 }

@@ -1,4 +1,3 @@
-use crate::descriptor_set::DescriptorSet;
 use crate::descriptor_set_layout::DescriptorSetLayout;
 use crate::gpu_device::GpuDevice;
 use crate::pipeline_builder::PipelineBuilder;
@@ -12,7 +11,6 @@ pub struct Pipeline {
     pub(crate) device: Arc<GpuDevice>,
     pub(crate) shader: Arc<Shader>,
     pub(crate) descriptor_set_layouts: Vec<Arc<DescriptorSetLayout>>,
-    pub(crate) descriptor_sets: Vec<Arc<DescriptorSet>>,
     pub(crate) vk_pipeline_layout: vk::PipelineLayout,
     pub(crate) vk_pipeline: vk::Pipeline,
 }
@@ -52,7 +50,6 @@ impl Pipeline {
             .iter()
             .map(|set| set.vk_descriptor_set_layout)
             .collect();
-        let descriptor_sets: Vec<_> = builder.descriptor_sets.values().cloned().collect();
         let vk_pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&vk_descriptor_set_layouts)
             .push_constant_ranges(&[])
@@ -92,7 +89,6 @@ impl Pipeline {
             vk_pipeline_layout,
             vk_pipeline: vk_pipelines[0],
             descriptor_set_layouts,
-            descriptor_sets,
         }
     }
 }

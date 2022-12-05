@@ -1,3 +1,4 @@
+use crate::descriptor_set::DescriptorSet;
 use crate::gpu_buffer::GpuBuffer;
 use crate::gpu_device::GpuDevice;
 use crate::pipeline::Pipeline;
@@ -105,7 +106,11 @@ impl Context {
         }
     }
 
-    pub fn bind_pipeline(&mut self, pipeline: Arc<Pipeline>) {
+    pub fn bind_pipeline(
+        &mut self,
+        pipeline: Arc<Pipeline>,
+        descriptor_sets: &[Arc<DescriptorSet>],
+    ) {
         if self.vk_command_buffer == vk::CommandBuffer::null() {
             self.init_command_buffer();
         }
@@ -119,9 +124,8 @@ impl Context {
         }
 
         unsafe {
-            if !pipeline.descriptor_sets.is_empty() {
-                let vk_descriptor_sets: Vec<_> = pipeline
-                    .descriptor_sets
+            if !descriptor_sets.is_empty() {
+                let vk_descriptor_sets: Vec<_> = descriptor_sets
                     .iter()
                     .map(|set| set.as_ref().vk_descriptor_set)
                     .collect();
@@ -136,6 +140,11 @@ impl Context {
             }
         }
 
+        self.gpu_resources.extend(
+            descriptor_sets
+                .iter()
+                .map(|r| r.clone() as Arc<dyn GpuResource>),
+        );
         self.gpu_resources.push(pipeline)
     }
 
