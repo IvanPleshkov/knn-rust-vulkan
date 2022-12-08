@@ -26,13 +26,13 @@ layout(binding = 3) buffer ScoresData {
     Score data[];
 } scores;
 
-
 #ifdef LARGE_K
 #define BHEAP_DATA scores.data
 #else
 Score heap_data[8];
 #define BHEAP_DATA heap_data
 #endif
+#define BHEAP_NAME bheap
 #define BHEAP_TYPE Score
 #define BHEAP_CMP(a, b) a.score > b.score
 #include "bheap.comp"
@@ -41,14 +41,14 @@ float positive_infinity = 1.0 / 0.0;
 
 void main()
 {
-    bheap_capacity = knn.k;
+    BHEAP_ID(bheap, capacity) = knn.k;
 #ifdef LARGE_K
-    bheap_offset = gl_GlobalInvocationID.x * knn.k;
+    BHEAP_ID(bheap, offset) = gl_GlobalInvocationID.x * knn.k;
 #else
-    bheap_offset = 0;
+    BHEAP_ID(bheap, offset) = 0;
 #endif
     for (uint i = 0; i < knn.k; i++) {
-        BHEAP_DATA[bheap_offset + i].score = positive_infinity;
+        BHEAP_DATA[BHEAP_ID(bheap, offset) + i].score = positive_infinity;
     }
 
     for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
@@ -59,12 +59,12 @@ void main()
         }
         // check if not nan
         if (score < 0.0 || 0.0 < score || score == 0.0) {
-            if (bheap_size == bheap_capacity) {
-                if (score < bheap_top().score) {
-                    bheap_change_top(Score(pointId, score));
+            if (BHEAP_ID(bheap, size) == BHEAP_ID(bheap, capacity)) {
+                if (score < BHEAP_ID(bheap, top)().score) {
+                    BHEAP_ID(bheap, change_top)(Score(pointId, score));
                 }
             } else {
-                bheap_push(Score(pointId, score));
+                BHEAP_ID(BHEAP_NAME, push)(Score(pointId, score));
             }
         }
     }

@@ -1,57 +1,61 @@
-uint bheap_offset = 0;
-uint bheap_capacity = 0;
-uint bheap_size = 0;
+#define CONCAT(a, b) a##b
 
-void _bheap_swap(uint i, uint j) {
-    BHEAP_TYPE tmp = BHEAP_DATA[bheap_offset + i];
-    BHEAP_DATA[bheap_offset + i] = BHEAP_DATA[bheap_offset + j];
-    BHEAP_DATA[bheap_offset + j] = tmp;
+#define BHEAP_ID(NAME, a) CONCAT(NAME, a)
+
+uint BHEAP_ID(BHEAP_NAME, offset) = 0;
+uint BHEAP_ID(BHEAP_NAME, capacity) = 0;
+uint BHEAP_ID(BHEAP_NAME, size) = 0;
+
+void BHEAP_ID(BHEAP_NAME, swap)(uint i, uint j) {
+    BHEAP_TYPE tmp = BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + i];
+    BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + i] = BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + j];
+    BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + j] = tmp;
 }
 
-bool _bheap_cmp(uint i, uint j) {
+bool BHEAP_ID(BHEAP_NAME, cmp)(uint i, uint j) {
     return BHEAP_CMP(
-        (BHEAP_DATA[bheap_offset + i]),
-        (BHEAP_DATA[bheap_offset + j])
+        (BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + i]),
+        (BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + j])
     );
 }
 
-void _sift_down(uint i) {
-    while (2 * i + 1 < bheap_size) {
+void BHEAP_ID(BHEAP_NAME, sift_down)(uint i) {
+    while (2 * i + 1 < BHEAP_ID(BHEAP_NAME, size)) {
         uint left = 2 * i + 1;
         uint right = 2 * i + 2;
         uint j = left;
-        if (right < bheap_size && _bheap_cmp(right, left)) {
+        if (right < BHEAP_ID(BHEAP_NAME, size) && BHEAP_ID(BHEAP_NAME, cmp)(right, left)) {
             j = right;
         }
-        if (_bheap_cmp(i, j)) {
+        if (BHEAP_ID(BHEAP_NAME, cmp)(i, j)) {
             break;
         }
-        _bheap_swap(i, j);
+        BHEAP_ID(BHEAP_NAME, swap)(i, j);
         i = j;
     }
 }
 
-void bheap_push(BHEAP_TYPE score) {
-    uint i = bheap_size;
-    bheap_size++;
-    BHEAP_DATA[bheap_offset + i] = score;
-    while (i > 0 && _bheap_cmp(i, (i - 1) / 2)) {
-        _bheap_swap(i, (i - 1) / 2);
+void BHEAP_ID(BHEAP_NAME, push)(BHEAP_TYPE score) {
+    uint i = BHEAP_ID(BHEAP_NAME, size);
+    BHEAP_ID(BHEAP_NAME, size)++;
+    BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + i] = score;
+    while (i > 0 && BHEAP_ID(BHEAP_NAME, cmp)(i, (i - 1) / 2)) {
+        BHEAP_ID(BHEAP_NAME, swap)(i, (i - 1) / 2);
         i = (i - 1) / 2;
     } 
 }
 
-BHEAP_TYPE bheap_top() {
-    return BHEAP_DATA[bheap_offset];
+BHEAP_TYPE BHEAP_ID(BHEAP_NAME, top)() {
+    return BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset)];
 }
 
-void bheap_pop() {
-    bheap_size--;
-    BHEAP_DATA[bheap_offset] = BHEAP_DATA[bheap_offset + bheap_size];
-    _sift_down(0);
+void BHEAP_ID(BHEAP_NAME, pop)() {
+    BHEAP_ID(BHEAP_NAME, size)--;
+    BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset)] = BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset) + BHEAP_ID(BHEAP_NAME, size)];
+    BHEAP_ID(BHEAP_NAME, sift_down)(0);
 }
 
-void bheap_change_top(BHEAP_TYPE new_value) {
-    BHEAP_DATA[bheap_offset] = new_value;
-    _sift_down(0);
+void BHEAP_ID(BHEAP_NAME, change_top)(BHEAP_TYPE new_value) {
+    BHEAP_DATA[BHEAP_ID(BHEAP_NAME, offset)] = new_value;
+    BHEAP_ID(BHEAP_NAME, sift_down)(0);
 }
