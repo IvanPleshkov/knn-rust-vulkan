@@ -1,11 +1,8 @@
 #version 450
 
-#define LARGE_K
+#include "base.comp"
 
-struct Score {
-    uint idx;
-    float score;
-};
+#define LARGE_K
 
 layout(binding = 0) uniform KnnUniformBuffer {
     uint dim;
@@ -23,34 +20,28 @@ layout(binding = 2) buffer QueryData {
 } query;
 
 layout(binding = 3) buffer ScoresData {
-    Score data[];
+    ScoredPoint data[];
 } scores;
 
 #ifdef LARGE_K
 #define BHEAP_DATA scores.data
 #else
-Score heap_data[8];
+ScoredPoint heap_data[8];
 #define BHEAP_DATA heap_data
 #endif
 #define BHEAP_NAME bheap
-#define BHEAP_TYPE Score
+#define BHEAP_TYPE ScoredPoint
 #define BHEAP_CMP(a, b) a.score > b.score
 #include "bheap.comp"
 
-float positive_infinity = 1.0 / 0.0;
-
-void main()
-{
-    BHEAP_ID(bheap, capacity) = knn.k;
+void main() {
 #ifdef LARGE_K
-    BHEAP_ID(bheap, offset) = gl_GlobalInvocationID.x * knn.k;
+    uint offset = gl_GlobalInvocationID.x * knn.k;
 #else
-    BHEAP_ID(bheap, offset) = 0;
+    uint offset = 0;
 #endif
-    for (uint i = 0; i < knn.k; i++) {
-        BHEAP_DATA[BHEAP_ID(bheap, offset) + i].score = positive_infinity;
-    }
-
+    BHEAP(bheap, init)(ScoredPoint(0, positive_infinity), knn.k, offset);
+ 
     for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
         uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
         float score = 0.0;
@@ -59,12 +50,12 @@ void main()
         }
         // check if not nan
         if (score < 0.0 || 0.0 < score || score == 0.0) {
-            if (BHEAP_ID(bheap, size) == BHEAP_ID(bheap, capacity)) {
-                if (score < BHEAP_ID(bheap, top)().score) {
-                    BHEAP_ID(bheap, change_top)(Score(pointId, score));
+            if (BHEAP(bheap, size) == BHEAP(bheap, capacity)) {
+                if (score < BHEAP(bheap, top)().score) {
+                    BHEAP(bheap, change_top)(ScoredPoint(pointId, score));
                 }
             } else {
-                BHEAP_ID(BHEAP_NAME, push)(Score(pointId, score));
+                BHEAP(bheap, push)(ScoredPoint(pointId, score));
             }
         }
     }

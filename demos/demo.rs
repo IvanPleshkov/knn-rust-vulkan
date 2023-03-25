@@ -46,7 +46,10 @@ fn main() {
     println!("uploading vectors time {:?}", timer.elapsed());
     println!("finish adding vectors");
 
-    for i in 0..100 {
+    let cnt = 100;
+    let mut gpu_timer = 0;
+    let mut cpu_timer = 0;
+    for i in 0..cnt {
         println!("{}", i);
         let query: Vec<f32> = (0..vector_dim).map(|_| rng.gen()).collect();
 
@@ -54,6 +57,7 @@ fn main() {
         let timer = std::time::Instant::now();
         let result = knn_worker.knn(&query, k);
         println!("finish searching gpu in {:?}", timer.elapsed());
+        gpu_timer += timer.elapsed().as_micros();
         println!("gpu result: {:?}", result);
 
         println!("start searching cpu");
@@ -77,12 +81,16 @@ fn main() {
             heap.into_sorted_vec()
         };
         println!("finish searching cpu in {:?}", timer.elapsed());
+        cpu_timer += timer.elapsed().as_micros();
         println!("cpu result: {:?}", scores);
 
         let idx1 = result.iter().map(|x| x.index).collect::<Vec<_>>();
         let idx2 = scores.iter().map(|x| x.index).collect::<Vec<_>>();
         assert_eq!(idx1, idx2);
     }
+
+    println!("GPU mean time: {}", gpu_timer as f32 / cnt as f32 / 1000.0);
+    println!("CPU mean time: {}", cpu_timer as f32 / cnt as f32 / 1000.0);
 
     println!("finish query vectors");
 }
