@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{
+use crate::gpu::{
     descriptor_set_layout::DescriptorSetLayout, gpu_device::GpuDevice, pipeline::Pipeline,
     shader::Shader,
 };

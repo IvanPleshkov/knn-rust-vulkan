@@ -1,7 +1,7 @@
 use ash::vk;
 use std::sync::Arc;
 
-use crate::{
+use crate::gpu::{
     descriptor_set_layout::DescriptorSetLayout, gpu_buffer::GpuBuffer, gpu_device::GpuDevice,
     GpuResource,
 };

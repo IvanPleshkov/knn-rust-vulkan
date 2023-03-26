@@ -1,8 +1,8 @@
-use crate::descriptor_set::DescriptorSet;
-use crate::gpu_buffer::GpuBuffer;
-use crate::gpu_device::GpuDevice;
-use crate::pipeline::Pipeline;
-use crate::GpuResource;
+use crate::gpu::descriptor_set::DescriptorSet;
+use crate::gpu::gpu_buffer::GpuBuffer;
+use crate::gpu::gpu_device::GpuDevice;
+use crate::gpu::pipeline::Pipeline;
+use crate::gpu::GpuResource;
 use ash::vk;
 use std::sync::Arc;
 

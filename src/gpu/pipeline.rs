@@ -1,8 +1,8 @@
-use crate::descriptor_set_layout::DescriptorSetLayout;
-use crate::gpu_device::GpuDevice;
-use crate::pipeline_builder::PipelineBuilder;
-use crate::shader::Shader;
-use crate::GpuResource;
+use crate::gpu::descriptor_set_layout::DescriptorSetLayout;
+use crate::gpu::gpu_device::GpuDevice;
+use crate::gpu::pipeline_builder::PipelineBuilder;
+use crate::gpu::shader::Shader;
+use crate::gpu::GpuResource;
 use ash::vk;
 use std::sync::Arc;
 

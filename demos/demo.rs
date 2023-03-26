@@ -4,10 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use knn_rust_vulkan::{
+use knn_rust_vulkan::{gpu::{
     debug_messenger::PanicIfErrorMessenger, gpu_device::GpuDevice, gpu_instance::GpuInstance,
-    knn_worker::Score,
-};
+}, knn::knn_worker::{KnnWorker, Score}};
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {
     let mut result = 0.0;
@@ -27,7 +26,7 @@ fn main() {
     let instance = Arc::new(GpuInstance::new("KNN vulkan", Some(&debug_messenger), false).unwrap());
     let device =
         Arc::new(GpuDevice::new(instance.clone(), instance.vk_physical_devices[0]).unwrap());
-    let mut knn_worker = knn_rust_vulkan::knn_worker::KnnWorker::new(device.clone(), vector_dim);
+    let mut knn_worker = KnnWorker::new(device.clone(), vector_dim);
 
     println!("Generate data");
     let mut rng = rand::thread_rng();

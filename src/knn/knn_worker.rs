@@ -1,6 +1,6 @@
 use std::{collections::BinaryHeap, sync::Arc};
 
-use crate::{
+use crate::gpu::{
     context::Context,
     descriptor_set::DescriptorSet,
     descriptor_set_layout::DescriptorSetLayout,
@@ -124,7 +124,7 @@ impl KnnWorker {
 
         let shader = Arc::new(Shader::new(
             device.clone(),
-            include_bytes!("../shaders/compute_dot_scores.spv"),
+            include_bytes!("../../shaders/compute_dot_scores.spv"),
         ));
 
         let pipeline = PipelineBuilder::new()

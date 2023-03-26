@@ -8,7 +8,7 @@ use ash::{
     vk::{self, KhrGetPhysicalDeviceProperties2Fn, KhrPortabilityEnumerationFn},
 };
 
-use crate::debug_messenger::DebugMessenger;
+use crate::gpu::debug_messenger::DebugMessenger;
 
 pub struct GpuInstance {
     _entry: ash::Entry,

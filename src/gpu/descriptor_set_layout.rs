@@ -1,7 +1,7 @@
 use ash::vk;
 use std::sync::Arc;
 
-use crate::gpu_device::GpuDevice;
+use crate::gpu::gpu_device::GpuDevice;
 
 pub struct DescriptorSetLayoutBuilder {
     pub uniform_buffer_bindings: Vec<usize>,

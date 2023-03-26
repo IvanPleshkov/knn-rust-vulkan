@@ -1,5 +1,5 @@
-use crate::gpu_device::GpuDevice;
-use crate::GpuResource;
+use crate::gpu::gpu_device::GpuDevice;
+use crate::gpu::GpuResource;
 use ash::vk;
 use std::ffi::CStr;
 use std::sync::Arc;

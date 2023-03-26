@@ -5,8 +5,8 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
 
-use crate::gpu_device::GpuDevice;
-use crate::GpuResource;
+use crate::gpu::gpu_device::GpuDevice;
+use crate::gpu::GpuResource;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum GpuBufferType {

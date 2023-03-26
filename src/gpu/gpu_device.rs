@@ -1,4 +1,4 @@
-use crate::gpu_instance::GpuInstance;
+use crate::gpu::gpu_instance::GpuInstance;
 use ash::vk;
 use gpu_allocator::vulkan::{Allocation, AllocationCreateDesc};
 use gpu_allocator::vulkan::{Allocator, AllocatorCreateDesc};
