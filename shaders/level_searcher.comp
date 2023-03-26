@@ -1,0 +1,114 @@
+#version 450
+
+#include "base.comp"
+
+layout(binding = 0) uniform LevelSearcherUniformBuffer {
+    uint entry_point;
+    uint ef;
+    uint candidates_capacity;
+    uint dim;
+    uint max_links_count;
+    uint inserting_point_id;
+} params;
+layout(binding = 1) buffer Vectors {
+    vec4 data[];
+} vectors;
+layout(binding = 2) buffer Links {
+    uint data[];
+} links;
+layout(binding = 3) buffer VisitedFlags {
+    uint data[];
+} visited_flags;
+layout(binding = 4) buffer Nearest {
+    ScoredPoint data[];
+} nearest;
+layout(binding = 5) buffer Candidates {
+    ScoredPoint data[];
+} candidates;
+
+// nearest binary heap
+#define BHEAP_NAME nearest
+#define BHEAP_DATA nearest.data
+#define BHEAP_TYPE ScoredPoint
+#define BHEAP_CMP(a, b) a.score < b.score
+#include "bheap.comp"
+
+#undef BHEAP_NAME
+#undef BHEAP_DATA
+#undef BHEAP_TYPE
+#undef BHEAP_CMP
+
+// candidates binary heap
+#define BHEAP_NAME candidates
+#define BHEAP_DATA candidates.data
+#define BHEAP_TYPE ScoredPoint
+#define BHEAP_CMP(a, b) a.score > b.score
+#include "bheap.comp"
+
+bool check_and_process_visited(uint id) {
+    uint flag_index = id / 32;
+    uint flag_bit = id % 32;
+    uint flag = visited_flags.data[flag_index];
+    uint flag_mask = 1 << flag_bit;
+    bool visited = (flag & flag_mask) != 0;
+    visited_flags.data[flag_index] = flag | flag_mask;
+    return visited;
+}
+
+void get_links(uint point_id, out uint begin_index, out uint end_index) {
+    uint count = links.data[point_id];
+    begin_index = point_id + 1;
+    end_index = begin_index + count;
+}
+
+float score_point(uint point_id) {
+    uint d = params.dim >> 2;
+    float score = 0.0;
+    for (uint i = 0; i < d; i++) {
+        score += dot(vectors.data[point_id * d + i], vectors.data[params.inserting_point_id * d + i]);
+    }
+    return score;
+}
+
+void main() {
+    BHEAP(nearest, init)(
+        ScoredPoint(0, negative_infinity),
+        params.ef,
+        gl_GlobalInvocationID.x * params.ef);
+    BHEAP(candidates, init)(
+        ScoredPoint(0, positive_infinity),
+        candidates_capacity,
+        gl_GlobalInvocationID.x * candidates_capacity);
+
+    check_and_process_visited(params.entry_point);
+    ScoredPoint entry_scored_point = ScoredPoint(params.entry_point, score_point(params.entry_point));
+    BHEAP(nearest, push)(entry_scored_point);
+    BHEAP(candidates, push)(entry_scored_point);
+
+    while (BHEAP(candidates, size) > 0) {
+        ScoredPoint candidate = BHEAP(candidates, pop)();
+        if (candidate.score < BHEAP(nearest, top)().score) {
+            break;
+        }
+        
+        uint links_begin;
+        uint links_end;
+        get_links(candidate.id, links_begin, links_end);
+
+        for (uint i = links_begin; i < links_end; i++) {
+            uint point_id = links.data[i];
+            if (check_and_process_visited(point_id)) {
+                ScoredPoint scored_point = ScoredPoint(point_id, score_point(point_id));
+                if (BHEAP(nearest, size) == BHEAP(nearest, capacity)) {
+                    if (scored_point.score > BHEAP(nearest, top)().score) {
+                        BHEAP(nearest, change_top)(scored_point);
+                        BHEAP(candidates, push)(scored_point);
+                    }
+                } else {
+                    BHEAP(nearest, push)(scored_point);
+                    BHEAP(candidates, push)(scored_point);
+                }
+            }
+        }
+    }
+}

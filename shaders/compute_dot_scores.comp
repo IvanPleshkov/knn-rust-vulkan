@@ -12,11 +12,11 @@ layout(binding = 0) uniform KnnUniformBuffer {
 } knn;
 
 layout(binding = 1) buffer VectorData {
-    float data[];
+    vec4 data[];
 } vectors;
 
 layout(binding = 2) buffer QueryData {
-    float data[];
+    vec4 data[];
 } query;
 
 layout(binding = 3) buffer ScoresData {
@@ -42,11 +42,12 @@ void main() {
 #endif
     BHEAP(bheap, init)(ScoredPoint(0, positive_infinity), knn.k, offset);
  
+    uint d = knn.dim / 4;
     for (uint relativePointId = 0; relativePointId < knn.block_size; relativePointId++) {
         uint pointId = gl_GlobalInvocationID.x * knn.block_size + relativePointId;
         float score = 0.0;
-        for (uint i = 0; i < knn.dim; i++) {
-            score += vectors.data[pointId * knn.dim + i] * query.data[i];
+        for (uint i = 0; i < d; i++) {
+            score += dot(vectors.data[pointId * d + i], query.data[i]);
         }
         // check if not nan
         if (score < 0.0 || 0.0 < score || score == 0.0) {

@@ -4,6 +4,7 @@
 #define CONCAT(a, b) a##_##b
 
 float positive_infinity = 1.0 / 0.0;
+float negative_infinity = -1.0 / 0.0;
 
 struct ScoredPoint {
     uint id;

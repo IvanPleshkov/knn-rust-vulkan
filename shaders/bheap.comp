@@ -83,7 +83,7 @@ BHEAP_TYPE BHEAP(BHEAP_NAME, top)() {
 
 // pop value
 BHEAP_TYPE BHEAP(BHEAP_NAME, pop)() {
-    BHEAP_TYPE top_value = BHEAP(BHEAP_NAME, top);
+    BHEAP_TYPE top_value = BHEAP(BHEAP_NAME, top)();
     BHEAP(BHEAP_NAME, size)--;
     BHEAP_DATA[BHEAP(BHEAP_NAME, offset)] = BHEAP_DATA[BHEAP(BHEAP_NAME, offset) + BHEAP(BHEAP_NAME, size)];
     BHEAP(BHEAP_NAME, sift_down)(0);
