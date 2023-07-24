@@ -15,9 +15,9 @@ Step 2: init
 BHEAP(BHEAP_NAME, init)(0.0, 8, 0); // default value, capacity and offset in storage
 
 Step 3: usage
-BHEAP(bheap, capacity) // get capacity
-BHEAP(bheap, offset) // get offset
-BHEAP(bheap, size); // get size
+BHEAP(BHEAP_NAME, capacity) // get capacity
+BHEAP(BHEAP_NAME, offset) // get offset
+BHEAP(BHEAP_NAME, size); // get size
 BHEAP(BHEAP_NAME, top)(); // get top value
 BHEAP(BHEAP_NAME, pop)(); // pop value
 BHEAP(BHEAP_NAME, change_top)(1.0); // pop and push
