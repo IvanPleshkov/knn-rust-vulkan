@@ -9,7 +9,7 @@ float heap_data[8]; // reserve storage for binary heap
 #define BHEAP_DATA heap_data // provide storage name
 #define BHEAP_TYPE float // binary tree element type
 #define BHEAP_CMP(a, b) a > b // cmp function
-#include "bheap.comp" // define all tree function
+#include "bheap.comp" // define all binary tree functions
 
 Step 2: init
 BHEAP(BHEAP_NAME, init)(0.0, 8, 0); // default value, capacity and offset in storage
@@ -104,3 +104,8 @@ void BHEAP(BHEAP_NAME, init)(BHEAP_TYPE none_value, uint capacity, uint offset) 
         BHEAP_DATA[BHEAP(BHEAP_NAME, offset) + i] = none_value;
     }
 }
+
+#undef BHEAP_NAME
+#undef BHEAP_DATA
+#undef BHEAP_TYPE
+#undef BHEAP_CMP
