@@ -79,18 +79,6 @@ impl Context {
         context
     }
 
-    pub fn draw_empty(&mut self, verts_count: usize) {
-        if self.vk_command_buffer == vk::CommandBuffer::null() {
-            self.init_command_buffer();
-        }
-
-        unsafe {
-            self.device
-                .vk_device
-                .cmd_draw(self.vk_command_buffer, verts_count as u32, 1, 0, 0);
-        }
-    }
-
     pub fn dispatch(&mut self, x: usize, y: usize, z: usize) {
         if self.vk_command_buffer == vk::CommandBuffer::null() {
             self.init_command_buffer();
